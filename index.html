@@ -84,64 +84,13 @@
       font-weight: bold;
       text-align: center;
     }
-
-    /* === POP-UP OVERLAY LOADING === */
-    .loading-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.6);
-      backdrop-filter: blur(4px);
-      display: none;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      z-index: 999;
-    }
-    .loading-card {
-      background: white;
-      padding: 25px 30px;
-      border-radius: 16px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-    }
-    .cute-gif {
-      width: 120px;
-      height: 120px;
-      object-fit: contain;
-      margin-bottom: 10px;
-    }
-    .progress-bar-container {
-      width: 200px;
-      height: 12px;
-      background: #e0e0e0;
-      border-radius: 10px;
-      overflow: hidden;
-      margin: 10px 0;
-    }
-    .progress-bar-fill {
-      width: 0%;
-      height: 100%;
-      background: linear-gradient(90deg, #ff758c, #ff7eb3);
-      border-radius: 10px;
-      transition: width 0.2s ease-in-out;
-    }
-    .percent-text {
-      font-size: 18px;
-      font-weight: bold;
-      color: #ff758c;
-    }
   </style>
 </head>
 <body>
 
   <h2>Kamera Web to Drive</h2>
 
-  <!-- Tombol Beralih Mode Versi -->
+  <!-- Tombol Beralih Versi -->
   <div class="mode-container">
     <button id="toggle-mode-btn">⚙️ Mode: Versi 2 (Lengkap)</button>
   </div>
@@ -159,18 +108,6 @@
 
   <p id="status"></p>
 
-  <!-- POP-UP LOADING (DANCING MONKEY GIF + PERCENTAGE) -->
-  <div id="loading-overlay" class="loading-overlay">
-    <div class="loading-card">
-      <img src="https://media.giphy.com/media/MCL131YUB0ufpDqAjK/giphy.gif" alt="Dancing Ape Loading" class="cute-gif">
-      <div class="progress-bar-container">
-        <div id="progress-fill" class="progress-bar-fill"></div>
-      </div>
-      <div id="percent-text" class="percent-text">0%</div>
-      <span style="font-size: 13px; color: #666; margin-top: 4px;">Sedang mengunggah ke Drive...</span>
-    </div>
-  </div>
-
   <canvas id="canvas" style="display: none;"></canvas>
 
   <script>
@@ -186,13 +123,8 @@
     const toggleModeBtn = document.getElementById('toggle-mode-btn');
     const statusText = document.getElementById('status');
 
-    // Elemen Loading
-    const loadingOverlay = document.getElementById('loading-overlay');
-    const progressFill = document.getElementById('progress-fill');
-    const percentText = document.getElementById('percent-text');
-
     let currentStream = null;
-    let isVersion2 = true; // Default Versi 2
+    let isVersion2 = true; // State versi (true = Versi 2, false = Versi 1)
     let currentFacingMode = 'environment';
     let isTorchOn = false;
 
@@ -202,7 +134,7 @@
       }
     }
 
-    // Jalankan Kamera
+    // Fungsi Pengatur Kamera Berdasarkan Versi Active
     async function startCamera() {
       stopCurrentStream();
       isTorchOn = false;
@@ -211,11 +143,19 @@
       statusText.style.color = "#333";
 
       try {
-        let videoConstraints = isVersion2 ? {
-          facingMode: currentFacingMode,
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        } : { facingMode: 'user' };
+        let videoConstraints = {};
+
+        if (isVersion2) {
+          // Konfigurasi Versi 2: Kamera Belakang + Resolusi Ideal HD
+          videoConstraints = {
+            facingMode: currentFacingMode,
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          };
+        } else {
+          // Konfigurasi Versi 1: Kamera Depan Default
+          videoConstraints = { facingMode: 'user' };
+        }
 
         currentStream = await navigator.mediaDevices.getUserMedia({
           video: videoConstraints,
@@ -230,9 +170,10 @@
       }
     }
 
-    // Toggle Mode (Versi 1 vs Versi 2)
+    // Toggle Antara Versi 1 dan Versi 2
     toggleModeBtn.addEventListener('click', () => {
       isVersion2 = !isVersion2;
+
       if (isVersion2) {
         toggleModeBtn.innerText = "⚙️ Mode: Versi 2 (Lengkap)";
         switchBtn.style.display = "inline-block";
@@ -243,10 +184,11 @@
         switchBtn.style.display = "none";
         torchBtn.style.display = "none";
       }
+
       startCamera();
     });
 
-    // Fitur Senter / Flash
+    // Fitur Senter (Hanya Versi 2)
     torchBtn.addEventListener('click', async () => {
       if (!currentStream || !isVersion2) return;
       const track = currentStream.getVideoTracks()[0];
@@ -266,7 +208,7 @@
       }
     });
 
-    // Fitur Tap to Focus
+    // Fitur Tap to Focus (Hanya Versi 2)
     videoWrapper.addEventListener('click', async (e) => {
       if (!currentStream || !isVersion2) return;
 
@@ -292,23 +234,20 @@
       }
     });
 
-    // Switch Kamera
+    // Switch Kamera (Hanya Versi 2)
     switchBtn.addEventListener('click', () => {
       if (!isVersion2) return;
       currentFacingMode = (currentFacingMode === 'environment') ? 'user' : 'environment';
       startCamera();
     });
 
-    // Ambil & Upload Foto dengan Progress Bar (%)
-    captureBtn.addEventListener('click', () => {
+    // Upload Foto ke Google Drive (Berlaku untuk Kedua Versi)
+    captureBtn.addEventListener('click', async () => {
       captureBtn.disabled = true;
       switchBtn.disabled = true;
       torchBtn.disabled = true;
-      
-      progressFill.style.width = '0%';
-      percentText.innerText = '0%';
-      loadingOverlay.style.display = 'flex';
-      statusText.innerText = "";
+      statusText.innerText = "Mengunggah foto ke Google Drive...";
+      statusText.style.color = "#0056b3";
 
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
@@ -317,56 +256,34 @@
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       const imageData = canvas.toDataURL('image/png');
-      const payload = JSON.stringify({ image: imageData });
 
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", WEB_APP_URL, true);
-      xhr.setRequestHeader("Content-Type", "text/plain;charset=utf-8");
+      try {
+        const response = await fetch(WEB_APP_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ image: imageData })
+        });
 
-      // Update Persentase
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          const percent = Math.round((e.loaded / e.total) * 100);
-          progressFill.style.width = percent + '%';
-          percentText.innerText = percent + '%';
-        }
-      };
+        const result = await response.json();
 
-      // Respon Selesai Upload
-      xhr.onload = () => {
-        loadingOverlay.style.display = 'none';
-        captureBtn.disabled = false;
-        switchBtn.disabled = false;
-        torchBtn.disabled = false;
-
-        try {
-          const result = JSON.parse(xhr.responseText);
-          if (result.status === "success") {
-            statusText.innerText = "Foto berhasil masuk ke Drive!";
-            statusText.style.color = "green";
-          } else {
-            statusText.innerText = "Gagal upload: " + result.message;
-            statusText.style.color = "red";
-          }
-        } catch (err) {
-          statusText.innerText = "Foto terunggah ke Drive!";
+        if (result.status === "success") {
+          statusText.innerText = "Foto berhasil masuk ke Drive!";
           statusText.style.color = "green";
+        } else {
+          statusText.innerText = "Gagal upload: " + result.message;
+          statusText.style.color = "red";
         }
-      };
-
-      xhr.onerror = () => {
-        loadingOverlay.style.display = 'none';
+      } catch (err) {
+        statusText.innerText = "Terjadi kesalahan: " + err.message;
+        statusText.style.color = "red";
+      } finally {
         captureBtn.disabled = false;
         switchBtn.disabled = false;
         torchBtn.disabled = false;
-        statusText.innerText = "Terjadi kesalahan upload.";
-        statusText.style.color = "red";
-      };
-
-      xhr.send(payload);
+      }
     });
 
-    // Jalankan Kamera Pertama Kali
+    // Jalankan Kamera Awal
     startCamera();
   </script>
 
