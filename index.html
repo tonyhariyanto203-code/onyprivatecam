@@ -14,6 +14,19 @@
       gap: 15px;
       background-color: #f4f4f9;
     }
+    .mode-container {
+      margin-bottom: 5px;
+    }
+    #toggle-mode-btn {
+      background-color: #6f42c1;
+      color: white;
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: bold;
+      border: none;
+      border-radius: 20px;
+      cursor: pointer;
+    }
     .video-container {
       position: relative;
       width: 100%;
@@ -26,7 +39,7 @@
       background: #000;
       display: block;
     }
-    /* Animasi lingkaran fokus saat di-tap */
+    /* Animasi lingkaran fokus untuk Versi 2 */
     .focus-ring {
       position: absolute;
       width: 50px;
@@ -71,15 +84,70 @@
       font-weight: bold;
       text-align: center;
     }
+
+    /* === POP-UP OVERLAY LOADING === */
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 999;
+    }
+    .loading-card {
+      background: white;
+      padding: 25px 30px;
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+    .cute-gif {
+      width: 120px;
+      height: 120px;
+      object-fit: contain;
+      margin-bottom: 10px;
+    }
+    .progress-bar-container {
+      width: 200px;
+      height: 12px;
+      background: #e0e0e0;
+      border-radius: 10px;
+      overflow: hidden;
+      margin: 10px 0;
+    }
+    .progress-bar-fill {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #ff758c, #ff7eb3);
+      border-radius: 10px;
+      transition: width 0.2s ease-in-out;
+    }
+    .percent-text {
+      font-size: 18px;
+      font-weight: bold;
+      color: #ff758c;
+    }
   </style>
 </head>
 <body>
 
   <h2>Kamera Web to Drive</h2>
 
+  <!-- Tombol Beralih Mode Versi -->
+  <div class="mode-container">
+    <button id="toggle-mode-btn">⚙️ Mode: Versi 2 (Lengkap)</button>
+  </div>
+
   <div class="video-container" id="video-wrapper">
     <video id="webcam" autoplay playsinline></video>
-    <!-- Elemen visual untuk respon Tap to Focus -->
     <div id="focus-ring" class="focus-ring"></div>
   </div>
 
@@ -90,6 +158,18 @@
   </div>
 
   <p id="status"></p>
+
+  <!-- POP-UP LOADING (DANCING MONKEY GIF + PERCENTAGE) -->
+  <div id="loading-overlay" class="loading-overlay">
+    <div class="loading-card">
+      <img src="https://media.giphy.com/media/MCL131YUB0ufpDqAjK/giphy.gif" alt="Dancing Ape Loading" class="cute-gif">
+      <div class="progress-bar-container">
+        <div id="progress-fill" class="progress-bar-fill"></div>
+      </div>
+      <div id="percent-text" class="percent-text">0%</div>
+      <span style="font-size: 13px; color: #666; margin-top: 4px;">Sedang mengunggah ke Drive...</span>
+    </div>
+  </div>
 
   <canvas id="canvas" style="display: none;"></canvas>
 
@@ -103,10 +183,17 @@
     const captureBtn = document.getElementById('capture-btn');
     const switchBtn = document.getElementById('switch-btn');
     const torchBtn = document.getElementById('torch-btn');
+    const toggleModeBtn = document.getElementById('toggle-mode-btn');
     const statusText = document.getElementById('status');
 
+    // Elemen Loading
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const progressFill = document.getElementById('progress-fill');
+    const percentText = document.getElementById('percent-text');
+
     let currentStream = null;
-    let currentFacingMode = 'environment'; // Default kamera belakang
+    let isVersion2 = true; // Default Versi 2
+    let currentFacingMode = 'environment';
     let isTorchOn = false;
 
     function stopCurrentStream() {
@@ -115,8 +202,8 @@
       }
     }
 
-    // 1. Jalankan Kamera
-    async function startCamera(facingMode) {
+    // Jalankan Kamera
+    async function startCamera() {
       stopCurrentStream();
       isTorchOn = false;
       torchBtn.innerText = "🔦 Senter: OFF";
@@ -124,14 +211,17 @@
       statusText.style.color = "#333";
 
       try {
-        currentStream = await navigator.mediaDevices.getUserMedia({ 
-          video: { 
-            facingMode: facingMode,
-            width: { ideal: 1920 },
-            height: { ideal: 1080 }
-          }, 
-          audio: false 
+        let videoConstraints = isVersion2 ? {
+          facingMode: currentFacingMode,
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        } : { facingMode: 'user' };
+
+        currentStream = await navigator.mediaDevices.getUserMedia({
+          video: videoConstraints,
+          audio: false
         });
+
         video.srcObject = currentStream;
         statusText.innerText = "";
       } catch (err) {
@@ -140,33 +230,46 @@
       }
     }
 
-    // 2. Fitur Senter / Flash
+    // Toggle Mode (Versi 1 vs Versi 2)
+    toggleModeBtn.addEventListener('click', () => {
+      isVersion2 = !isVersion2;
+      if (isVersion2) {
+        toggleModeBtn.innerText = "⚙️ Mode: Versi 2 (Lengkap)";
+        switchBtn.style.display = "inline-block";
+        torchBtn.style.display = "inline-block";
+        currentFacingMode = 'environment';
+      } else {
+        toggleModeBtn.innerText = "⚙️ Mode: Versi 1 (Simple)";
+        switchBtn.style.display = "none";
+        torchBtn.style.display = "none";
+      }
+      startCamera();
+    });
+
+    // Fitur Senter / Flash
     torchBtn.addEventListener('click', async () => {
-      if (!currentStream) return;
+      if (!currentStream || !isVersion2) return;
       const track = currentStream.getVideoTracks()[0];
       const capabilities = track.getCapabilities ? track.getCapabilities() : {};
 
       if (!capabilities.torch) {
-        alert("Senter/Flash tidak didukung di kamera ini atau browser tidak menyediakannya.");
+        alert("Senter/Flash tidak didukung di kamera ini.");
         return;
       }
 
       try {
         isTorchOn = !isTorchOn;
-        await track.applyConstraints({
-          advanced: [{ torch: isTorchOn }]
-        });
+        await track.applyConstraints({ advanced: [{ torch: isTorchOn }] });
         torchBtn.innerText = isTorchOn ? "🔦 Senter: ON" : "🔦 Senter: OFF";
       } catch (err) {
         alert("Gagal mengontrol senter: " + err.message);
       }
     });
 
-    // 3. Fitur Tap to Focus
+    // Fitur Tap to Focus
     videoWrapper.addEventListener('click', async (e) => {
-      if (!currentStream) return;
+      if (!currentStream || !isVersion2) return;
 
-      // Buat efek visual lingkaran kuning saat di-tap
       const rect = videoWrapper.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
@@ -175,38 +278,37 @@
       focusRing.style.top = `${y}px`;
       focusRing.classList.add('active');
 
-      setTimeout(() => {
-        focusRing.classList.remove('active');
-      }, 800);
+      setTimeout(() => focusRing.classList.remove('active'), 800);
 
-      // Terapkan perintah fokus ke kamera hardware
       const track = currentStream.getVideoTracks()[0];
       const capabilities = track.getCapabilities ? track.getCapabilities() : {};
 
       if (capabilities.focusMode && capabilities.focusMode.includes('single-shot')) {
         try {
-          await track.applyConstraints({
-            advanced: [{ focusMode: 'single-shot' }]
-          });
+          await track.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] });
         } catch (err) {
           console.log("Fokus manual tidak didukung:", err);
         }
       }
     });
 
-    // 4. Switch Kamera (Depan <-> Belakang)
+    // Switch Kamera
     switchBtn.addEventListener('click', () => {
+      if (!isVersion2) return;
       currentFacingMode = (currentFacingMode === 'environment') ? 'user' : 'environment';
-      startCamera(currentFacingMode);
+      startCamera();
     });
 
-    // 5. Ambil Foto & Kirim ke Drive
-    captureBtn.addEventListener('click', async () => {
+    // Ambil & Upload Foto dengan Progress Bar (%)
+    captureBtn.addEventListener('click', () => {
       captureBtn.disabled = true;
       switchBtn.disabled = true;
       torchBtn.disabled = true;
-      statusText.innerText = "Mengunggah foto ke Google Drive...";
-      statusText.style.color = "#0056b3";
+      
+      progressFill.style.width = '0%';
+      percentText.innerText = '0%';
+      loadingOverlay.style.display = 'flex';
+      statusText.innerText = "";
 
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
@@ -215,37 +317,57 @@
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       const imageData = canvas.toDataURL('image/png');
+      const payload = JSON.stringify({ image: imageData });
 
-      try {
-        const response = await fetch(WEB_APP_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "text/plain;charset=utf-8"
-          },
-          body: JSON.stringify({ image: imageData })
-        });
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", WEB_APP_URL, true);
+      xhr.setRequestHeader("Content-Type", "text/plain;charset=utf-8");
 
-        const result = await response.json();
-
-        if (result.status === "success") {
-          statusText.innerText = "Foto berhasil masuk ke Drive!";
-          statusText.style.color = "green";
-        } else {
-          statusText.innerText = "Gagal upload: " + result.message;
-          statusText.style.color = "red";
+      // Update Persentase
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const percent = Math.round((e.loaded / e.total) * 100);
+          progressFill.style.width = percent + '%';
+          percentText.innerText = percent + '%';
         }
-      } catch (err) {
-        statusText.innerText = "Terjadi kesalahan: " + err.message;
-        statusText.style.color = "red";
-      } finally {
+      };
+
+      // Respon Selesai Upload
+      xhr.onload = () => {
+        loadingOverlay.style.display = 'none';
         captureBtn.disabled = false;
         switchBtn.disabled = false;
         torchBtn.disabled = false;
-      }
+
+        try {
+          const result = JSON.parse(xhr.responseText);
+          if (result.status === "success") {
+            statusText.innerText = "Foto berhasil masuk ke Drive!";
+            statusText.style.color = "green";
+          } else {
+            statusText.innerText = "Gagal upload: " + result.message;
+            statusText.style.color = "red";
+          }
+        } catch (err) {
+          statusText.innerText = "Foto terunggah ke Drive!";
+          statusText.style.color = "green";
+        }
+      };
+
+      xhr.onerror = () => {
+        loadingOverlay.style.display = 'none';
+        captureBtn.disabled = false;
+        switchBtn.disabled = false;
+        torchBtn.disabled = false;
+        statusText.innerText = "Terjadi kesalahan upload.";
+        statusText.style.color = "red";
+      };
+
+      xhr.send(payload);
     });
 
-    // Jalankan pertama kali
-    startCamera(currentFacingMode);
+    // Jalankan Kamera Pertama Kali
+    startCamera();
   </script>
 
 </body>
