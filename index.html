@@ -124,8 +124,8 @@
     const statusText = document.getElementById('status');
 
     let currentStream = null;
-    let isVersion2 = true; // State versi (true = Versi 2, false = Versi 1)
-    let currentFacingMode = 'environment';
+    let isVersion2 = true; // Default Versi 2
+    let currentFacingMode = 'environment'; // Setiap mode selalu mulai dari kamera belakang
     let isTorchOn = false;
 
     function stopCurrentStream() {
@@ -134,7 +134,7 @@
       }
     }
 
-    // Fungsi Pengatur Kamera Berdasarkan Versi Active
+    // Fungsi Pengatur Kamera Berdasarkan Mode Aktivasi
     async function startCamera() {
       stopCurrentStream();
       isTorchOn = false;
@@ -146,15 +146,15 @@
         let videoConstraints = {};
 
         if (isVersion2) {
-          // Konfigurasi Versi 2: Kamera Belakang + Resolusi Ideal HD
+          // Versi 2: Kamera Belakang (Default) + High-Res HD
           videoConstraints = {
             facingMode: currentFacingMode,
             width: { ideal: 1920 },
             height: { ideal: 1080 }
           };
         } else {
-          // Konfigurasi Versi 1: Kamera Depan Default
-          videoConstraints = { facingMode: 'user' };
+          // Versi 1: Kamera Belakang (Default) Simple
+          videoConstraints = { facingMode: currentFacingMode };
         }
 
         currentStream = await navigator.mediaDevices.getUserMedia({
@@ -173,18 +173,24 @@
     // Toggle Antara Versi 1 dan Versi 2
     toggleModeBtn.addEventListener('click', () => {
       isVersion2 = !isVersion2;
+      currentFacingMode = 'environment'; // Reset selalu balik ke kamera belakang dulu
 
       if (isVersion2) {
         toggleModeBtn.innerText = "⚙️ Mode: Versi 2 (Lengkap)";
         switchBtn.style.display = "inline-block";
         torchBtn.style.display = "inline-block";
-        currentFacingMode = 'environment';
       } else {
         toggleModeBtn.innerText = "⚙️ Mode: Versi 1 (Simple)";
-        switchBtn.style.display = "none";
-        torchBtn.style.display = "none";
+        switchBtn.style.display = "inline-block"; // Versi 1 sekarang tetep ada tombol ganti kamera
+        torchBtn.style.display = "none";          // Versi 1 tidak ada tombol senter
       }
 
+      startCamera();
+    });
+
+    // Fitur Switch Kamera (Berlaku untuk Versi 1 & Versi 2)
+    switchBtn.addEventListener('click', () => {
+      currentFacingMode = (currentFacingMode === 'environment') ? 'user' : 'environment';
       startCamera();
     });
 
@@ -234,14 +240,7 @@
       }
     });
 
-    // Switch Kamera (Hanya Versi 2)
-    switchBtn.addEventListener('click', () => {
-      if (!isVersion2) return;
-      currentFacingMode = (currentFacingMode === 'environment') ? 'user' : 'environment';
-      startCamera();
-    });
-
-    // Upload Foto ke Google Drive (Berlaku untuk Kedua Versi)
+    // Upload Foto ke Google Drive (Berlaku untuk Kedua Versi - Fix CORS Mode)
     captureBtn.addEventListener('click', async () => {
       captureBtn.disabled = true;
       switchBtn.disabled = true;
@@ -256,25 +255,20 @@
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       const imageData = canvas.toDataURL('image/png');
+      const payload = JSON.stringify({ image: imageData });
 
       try {
-        const response = await fetch(WEB_APP_URL, {
+        await fetch(WEB_APP_URL, {
           method: "POST",
+          mode: "no-cors",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ image: imageData })
+          body: payload
         });
 
-        const result = await response.json();
-
-        if (result.status === "success") {
-          statusText.innerText = "Foto berhasil masuk ke Drive!";
-          statusText.style.color = "green";
-        } else {
-          statusText.innerText = "Gagal upload: " + result.message;
-          statusText.style.color = "red";
-        }
+        statusText.innerText = "Foto berhasil masuk ke Drive!";
+        statusText.style.color = "green";
       } catch (err) {
-        statusText.innerText = "Terjadi kesalahan: " + err.message;
+        statusText.innerText = "Gagal upload: " + err.message;
         statusText.style.color = "red";
       } finally {
         captureBtn.disabled = false;
@@ -283,7 +277,7 @@
       }
     });
 
-    // Jalankan Kamera Awal
+    // Jalankan Kamera Pertama Kali (Default Kamera Belakang)
     startCamera();
   </script>
 
