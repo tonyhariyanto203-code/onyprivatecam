@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kamera Web Ke Google Drive</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      gap: 15px;
+      background-color: #f4f4f9;
+    }
+    .video-container {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+    }
+    video {
+      width: 100%;
+      border-radius: 10px;
+      background: #000;
+    }
+    button {
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      background-color: #28a745;
+      color: white;
+      transition: 0.2s;
+    }
+    button:disabled {
+      background-color: #6c757d;
+      cursor: not-allowed;
+    }
+    #status {
+      margin-top: 10px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Kamera Web to Drive</h2>
+
+  <div class="video-container">
+    <video id="webcam" autoplay playsinline></video>
+  </div>
+
+  <button id="capture-btn">Ambil & Upload Foto</button>
+
+  <p id="status"></p>
+
+  <canvas id="canvas" style="display: none;"></canvas>
+
+  <script>
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbw9ICQDUp25ZMhZLXtWdQgQfI5AOLYthKLTjqcsPpANMcytoFvtL0CDRkNytHhFKbqn6g/exec";
+
+    const video = document.getElementById('webcam');
+    const canvas = document.getElementById('canvas');
+    const captureBtn = document.getElementById('capture-btn');
+    const statusText = document.getElementById('status');
+
+    // 1. Jalankan Kamera
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: 'user' }, 
+          audio: false 
+        });
+        video.srcObject = stream;
+      } catch (err) {
+        statusText.innerText = "Gagal buka kamera: " + err.message;
+        statusText.style.color = "red";
+      }
+    }
+
+    // 2. Ambil Foto & Kirim ke Drive via Apps Script
+    captureBtn.addEventListener('click', async () => {
+      captureBtn.disabled = true;
+      statusText.innerText = "Mengunggah foto ke Google Drive...";
+      statusText.style.color = "#0056b3";
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      const context = canvas.getContext('2d');
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const imageData = canvas.toDataURL('image/png');
+
+      try {
+        const response = await fetch(WEB_APP_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "text/plain;charset=utf-8"
+          },
+          body: JSON.stringify({ image: imageData })
+        });
+
+        const result = await response.json();
+
+        if (result.status === "success") {
+          statusText.innerText = "Foto berhasil masuk ke Drive!";
+          statusText.style.color = "green";
+        } else {
+          statusText.innerText = "Gagal upload: " + result.message;
+          statusText.style.color = "red";
+        }
+      } catch (err) {
+        statusText.innerText = "Terjadi kesalahan: " + err.message;
+        statusText.style.color = "red";
+      } finally {
+        captureBtn.disabled = false;
+      }
+    });
+
+    startCamera();
+  </script>
+
+</body>
+</html>
