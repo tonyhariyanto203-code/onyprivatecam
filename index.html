@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kamera Web Fast to Drive</title>
+  <title>Kamera Web Ke Google Drive</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -18,16 +18,15 @@
       position: relative;
       width: 100%;
       max-width: 480px;
-      overflow: hidden;
-      border-radius: 10px;
-      background: #000;
       cursor: pointer;
     }
     video {
       width: 100%;
+      border-radius: 10px;
+      background: #000;
       display: block;
     }
-    /* Indicator Tap to Focus */
+    /* Animasi lingkaran fokus saat di-tap */
     .focus-ring {
       position: absolute;
       width: 50px;
@@ -36,8 +35,8 @@
       border-radius: 50%;
       transform: translate(-50%, -50%) scale(1.5);
       opacity: 0;
-      pointer-events: none;
       transition: transform 0.2s, opacity 0.2s;
+      pointer-events: none;
     }
     .focus-ring.active {
       transform: translate(-50%, -50%) scale(1);
@@ -61,9 +60,10 @@
     }
     #capture-btn { background-color: #28a745; }
     #switch-btn { background-color: #007bff; }
-    #torch-btn { background-color: #ff9800; }
+    #torch-btn { background-color: #ffc107; color: #333; }
     button:disabled {
       background-color: #6c757d;
+      color: white;
       cursor: not-allowed;
     }
     #status {
@@ -75,10 +75,11 @@
 </head>
 <body>
 
-  <h2>Kamera Web Fast to Drive</h2>
+  <h2>Kamera Web to Drive</h2>
 
-  <div class="video-container" id="video-box">
+  <div class="video-container" id="video-wrapper">
     <video id="webcam" autoplay playsinline></video>
+    <!-- Elemen visual untuk respon Tap to Focus -->
     <div id="focus-ring" class="focus-ring"></div>
   </div>
 
@@ -96,7 +97,7 @@
     const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbw9ICQDUp25ZMhZLXtWdQgQfI5AOLYthKLTjqcsPpANMcytoFvtL0CDRkNytHhFKbqn6g/exec";
 
     const video = document.getElementById('webcam');
-    const videoBox = document.getElementById('video-box');
+    const videoWrapper = document.getElementById('video-wrapper');
     const focusRing = document.getElementById('focus-ring');
     const canvas = document.getElementById('canvas');
     const captureBtn = document.getElementById('capture-btn');
@@ -114,7 +115,7 @@
       }
     }
 
-    // 1. Jalankan Kamera Resolusi Standar (720p - Ringan & Cepat)
+    // 1. Jalankan Kamera
     async function startCamera(facingMode) {
       stopCurrentStream();
       isTorchOn = false;
@@ -122,53 +123,34 @@
       statusText.innerText = "Membuka kamera...";
       statusText.style.color = "#333";
 
-      const constraints = {
-        video: {
-          facingMode: { ideal: facingMode },
-          width: { ideal: 1280 }, // Resolusi standar HD 720p
-          height: { ideal: 720 }
-        },
-        audio: false
-      };
-
       try {
-        currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+        currentStream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            facingMode: facingMode,
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          }, 
+          audio: false 
+        });
         video.srcObject = currentStream;
-
-        video.onloadedmetadata = () => {
-          checkCapabilities();
-          statusText.innerText = "";
-        };
+        statusText.innerText = "";
       } catch (err) {
         statusText.innerText = "Gagal buka kamera: " + err.message;
         statusText.style.color = "red";
       }
     }
 
-    // Cek kemampuan kamera (Torch & Focus)
-    function checkCapabilities() {
+    // 2. Fitur Senter / Flash
+    torchBtn.addEventListener('click', async () => {
       if (!currentStream) return;
       const track = currentStream.getVideoTracks()[0];
       const capabilities = track.getCapabilities ? track.getCapabilities() : {};
 
-      if (capabilities.torch) {
-        torchBtn.style.display = "inline-block";
-      } else {
-        torchBtn.style.display = "none";
+      if (!capabilities.torch) {
+        alert("Senter/Flash tidak didukung di kamera ini atau browser tidak menyediakannya.");
+        return;
       }
 
-      if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
-        track.applyConstraints({
-          advanced: [{ focusMode: 'continuous' }]
-        }).catch(() => {});
-      }
-    }
-
-    // 2. Fitur 1: Senter / Flash Toggle
-    torchBtn.addEventListener('click', async () => {
-      if (!currentStream) return;
-      const track = currentStream.getVideoTracks()[0];
-      
       try {
         isTorchOn = !isTorchOn;
         await track.applyConstraints({
@@ -176,50 +158,54 @@
         });
         torchBtn.innerText = isTorchOn ? "🔦 Senter: ON" : "🔦 Senter: OFF";
       } catch (err) {
-        alert("Senter tidak didukung pada kamera ini.");
+        alert("Gagal mengontrol senter: " + err.message);
       }
     });
 
-    // 3. Fitur 2: Tap to Focus
-    videoBox.addEventListener('click', async (e) => {
+    // 3. Fitur Tap to Focus
+    videoWrapper.addEventListener('click', async (e) => {
       if (!currentStream) return;
 
-      const rect = videoBox.getBoundingClientRect();
+      // Buat efek visual lingkaran kuning saat di-tap
+      const rect = videoWrapper.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
 
       focusRing.style.left = `${x}px`;
       focusRing.style.top = `${y}px`;
       focusRing.classList.add('active');
-      setTimeout(() => focusRing.classList.remove('active'), 800);
 
+      setTimeout(() => {
+        focusRing.classList.remove('active');
+      }, 800);
+
+      // Terapkan perintah fokus ke kamera hardware
       const track = currentStream.getVideoTracks()[0];
       const capabilities = track.getCapabilities ? track.getCapabilities() : {};
 
-      if (capabilities.focusMode) {
+      if (capabilities.focusMode && capabilities.focusMode.includes('single-shot')) {
         try {
-          await track.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] });
-          setTimeout(() => {
-            track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
-          }, 1000);
+          await track.applyConstraints({
+            advanced: [{ focusMode: 'single-shot' }]
+          });
         } catch (err) {
-          console.log("Tap to focus tidak didukung penuh di HP ini.");
+          console.log("Fokus manual tidak didukung:", err);
         }
       }
     });
 
-    // Switch Kamera
+    // 4. Switch Kamera (Depan <-> Belakang)
     switchBtn.addEventListener('click', () => {
       currentFacingMode = (currentFacingMode === 'environment') ? 'user' : 'environment';
       startCamera(currentFacingMode);
     });
 
-    // Upload Foto
+    // 5. Ambil Foto & Kirim ke Drive
     captureBtn.addEventListener('click', async () => {
       captureBtn.disabled = true;
       switchBtn.disabled = true;
       torchBtn.disabled = true;
-      statusText.innerText = "Mengunggah foto ke Drive...";
+      statusText.innerText = "Mengunggah foto ke Google Drive...";
       statusText.style.color = "#0056b3";
 
       canvas.width = video.videoWidth;
@@ -258,6 +244,7 @@
       }
     });
 
+    // Jalankan pertama kali
     startCamera(currentFacingMode);
   </script>
 
