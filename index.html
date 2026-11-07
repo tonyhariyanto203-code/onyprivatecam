@@ -79,8 +79,38 @@
       color: white;
       cursor: not-allowed;
     }
+
+    /* === STYLES PROGRESS BAR INLINE (TANPA OVERLAY) === */
+    .upload-progress-box {
+      width: 100%;
+      max-width: 320px;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      margin-top: 5px;
+    }
+    .progress-bar-container {
+      width: 100%;
+      height: 10px;
+      background: #e0e0e0;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #28a745, #20c997);
+      border-radius: 10px;
+      transition: width 0.15s ease-in-out;
+    }
+    .percent-text {
+      font-size: 14px;
+      font-weight: bold;
+      color: #333;
+    }
     #status {
-      margin-top: 10px;
+      margin-top: 5px;
       font-weight: bold;
       text-align: center;
     }
@@ -90,7 +120,7 @@
 
   <h2>Kamera Web to Drive</h2>
 
-  <!-- Tombol Beralih Versi -->
+  <!-- Tombol Beralih Mode Versi -->
   <div class="mode-container">
     <button id="toggle-mode-btn">⚙️ Mode: Versi 2 (Lengkap)</button>
   </div>
@@ -104,6 +134,14 @@
     <button id="switch-btn">🔄 Ganti Kamera</button>
     <button id="torch-btn">🔦 Senter: OFF</button>
     <button id="capture-btn">📷 Ambil & Upload Foto</button>
+  </div>
+
+  <!-- CONTAINER PERSENTASE LANGSUNG DI BAWAH TOMBOL -->
+  <div id="progress-box" class="upload-progress-box">
+    <div class="progress-bar-container">
+      <div id="progress-fill" class="progress-bar-fill"></div>
+    </div>
+    <span id="percent-text" class="percent-text">0%</span>
   </div>
 
   <p id="status"></p>
@@ -123,9 +161,14 @@
     const toggleModeBtn = document.getElementById('toggle-mode-btn');
     const statusText = document.getElementById('status');
 
+    // Elemen Progress Bar Inline
+    const progressBox = document.getElementById('progress-box');
+    const progressFill = document.getElementById('progress-fill');
+    const percentText = document.getElementById('percent-text');
+
     let currentStream = null;
     let isVersion2 = true; // Default Versi 2
-    let currentFacingMode = 'environment'; // Setiap mode selalu mulai dari kamera belakang
+    let currentFacingMode = 'environment'; // Kamera belakang default di awal
     let isTorchOn = false;
 
     function stopCurrentStream() {
@@ -134,7 +177,7 @@
       }
     }
 
-    // Fungsi Pengatur Kamera Berdasarkan Mode Aktivasi
+    // Jalankan Kamera
     async function startCamera() {
       stopCurrentStream();
       isTorchOn = false;
@@ -143,19 +186,11 @@
       statusText.style.color = "#333";
 
       try {
-        let videoConstraints = {};
-
-        if (isVersion2) {
-          // Versi 2: Kamera Belakang (Default) + High-Res HD
-          videoConstraints = {
-            facingMode: currentFacingMode,
-            width: { ideal: 1920 },
-            height: { ideal: 1080 }
-          };
-        } else {
-          // Versi 1: Kamera Belakang (Default) Simple
-          videoConstraints = { facingMode: currentFacingMode };
-        }
+        let videoConstraints = isVersion2 ? {
+          facingMode: currentFacingMode,
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        } : { facingMode: currentFacingMode };
 
         currentStream = await navigator.mediaDevices.getUserMedia({
           video: videoConstraints,
@@ -181,8 +216,8 @@
         torchBtn.style.display = "inline-block";
       } else {
         toggleModeBtn.innerText = "⚙️ Mode: Versi 1 (Simple)";
-        switchBtn.style.display = "inline-block"; // Versi 1 sekarang tetep ada tombol ganti kamera
-        torchBtn.style.display = "none";          // Versi 1 tidak ada tombol senter
+        switchBtn.style.display = "inline-block"; // Versi 1 ada tombol switch kamera juga
+        torchBtn.style.display = "none";
       }
 
       startCamera();
@@ -240,13 +275,17 @@
       }
     });
 
-    // Upload Foto ke Google Drive (Berlaku untuk Kedua Versi - Fix CORS Mode)
+    // Upload Foto ke Drive + Progress Persentase Inline
     captureBtn.addEventListener('click', async () => {
       captureBtn.disabled = true;
       switchBtn.disabled = true;
       torchBtn.disabled = true;
-      statusText.innerText = "Mengunggah foto ke Google Drive...";
-      statusText.style.color = "#0056b3";
+
+      // Reset progress bar & tampilkan di bawah tombol
+      progressFill.style.width = '10%';
+      percentText.innerText = 'Uploading 10%';
+      progressBox.style.display = 'flex';
+      statusText.innerText = "";
 
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
@@ -258,6 +297,16 @@
       const payload = JSON.stringify({ image: imageData });
 
       try {
+        // Animasi persentase halus saat mengirim
+        let fakePercent = 10;
+        const progressInterval = setInterval(() => {
+          if (fakePercent < 90) {
+            fakePercent += 10;
+            progressFill.style.width = fakePercent + '%';
+            percentText.innerText = `Uploading ${fakePercent}%`;
+          }
+        }, 150);
+
         await fetch(WEB_APP_URL, {
           method: "POST",
           mode: "no-cors",
@@ -265,9 +314,18 @@
           body: payload
         });
 
-        statusText.innerText = "Foto berhasil masuk ke Drive!";
-        statusText.style.color = "green";
+        clearInterval(progressInterval);
+        progressFill.style.width = '100%';
+        percentText.innerText = 'Upload 100%';
+
+        setTimeout(() => {
+          progressBox.style.display = 'none';
+          statusText.innerText = "Foto berhasil masuk ke Drive!";
+          statusText.style.color = "green";
+        }, 500);
+
       } catch (err) {
+        progressBox.style.display = 'none';
         statusText.innerText = "Gagal upload: " + err.message;
         statusText.style.color = "red";
       } finally {
@@ -277,7 +335,7 @@
       }
     });
 
-    // Jalankan Kamera Pertama Kali (Default Kamera Belakang)
+    // Jalankan Kamera Pertama Kali (Kamera Belakang Default)
     startCamera();
   </script>
 
