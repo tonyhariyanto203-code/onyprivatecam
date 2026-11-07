@@ -24,16 +24,27 @@
       border-radius: 10px;
       background: #000;
     }
+    .button-group {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
     button {
-      padding: 12px 24px;
-      font-size: 16px;
+      padding: 12px 20px;
+      font-size: 15px;
       font-weight: bold;
       cursor: pointer;
       border: none;
       border-radius: 6px;
-      background-color: #28a745;
       color: white;
       transition: 0.2s;
+    }
+    #capture-btn {
+      background-color: #28a745;
+    }
+    #switch-btn {
+      background-color: #007bff;
     }
     button:disabled {
       background-color: #6c757d;
@@ -42,6 +53,7 @@
     #status {
       margin-top: 10px;
       font-weight: bold;
+      text-align: center;
     }
   </style>
 </head>
@@ -53,7 +65,12 @@
     <video id="webcam" autoplay playsinline></video>
   </div>
 
-  <button id="capture-btn">Ambil & Upload Foto</button>
+  <div class="button-group">
+    <!-- Tombol Balik Kamera -->
+    <button id="switch-btn">🔄 Ganti Kamera</button>
+    <!-- Tombol Capture -->
+    <button id="capture-btn">📷 Ambil & Upload Foto</button>
+  </div>
 
   <p id="status"></p>
 
@@ -65,25 +82,59 @@
     const video = document.getElementById('webcam');
     const canvas = document.getElementById('canvas');
     const captureBtn = document.getElementById('capture-btn');
+    const switchBtn = document.getElementById('switch-btn');
     const statusText = document.getElementById('status');
 
-    // 1. Jalankan Kamera
-    async function startCamera() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { facingMode: 'user' }, 
-          audio: false 
-        });
-        video.srcObject = stream;
-      } catch (err) {
-        statusText.innerText = "Gagal buka kamera: " + err.message;
-        statusText.style.color = "red";
+    let currentStream = null;
+    // Default pertama kali buka: kamera belakang ('environment')
+    let currentFacingMode = 'environment'; 
+
+    // Fungsi untuk mematikan stream kamera yang sedang jalan
+    function stopCurrentStream() {
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
       }
     }
 
-    // 2. Ambil Foto & Kirim ke Drive via Apps Script
+    // 1. Jalankan Kamera
+    async function startCamera(facingMode) {
+      stopCurrentStream();
+      statusText.innerText = "Membuka kamera...";
+      statusText.style.color = "#333";
+
+      try {
+        currentStream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: { exact: facingMode } }, 
+          audio: false 
+        });
+        video.srcObject = currentStream;
+        statusText.innerText = "";
+      } catch (err) {
+        // Fallback jika mode 'exact' gagal di beberapa browser/HP
+        try {
+          currentStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: facingMode }, 
+            audio: false 
+          });
+          video.srcObject = currentStream;
+          statusText.innerText = "";
+        } catch (fallbackErr) {
+          statusText.innerText = "Gagal buka kamera: " + fallbackErr.message;
+          statusText.style.color = "red";
+        }
+      }
+    }
+
+    // 2. Tombol Switch Kamera (Depan <-> Belakang)
+    switchBtn.addEventListener('click', () => {
+      currentFacingMode = (currentFacingMode === 'environment') ? 'user' : 'environment';
+      startCamera(currentFacingMode);
+    });
+
+    // 3. Ambil Foto & Kirim ke Drive via Apps Script
     captureBtn.addEventListener('click', async () => {
       captureBtn.disabled = true;
+      switchBtn.disabled = true;
       statusText.innerText = "Mengunggah foto ke Google Drive...";
       statusText.style.color = "#0056b3";
 
@@ -118,10 +169,12 @@
         statusText.style.color = "red";
       } finally {
         captureBtn.disabled = false;
+        switchBtn.disabled = false;
       }
     });
 
-    startCamera();
+    // Jalankan kamera belakang pertama kali pas halaman dibuka
+    startCamera(currentFacingMode);
   </script>
 
 </body>
